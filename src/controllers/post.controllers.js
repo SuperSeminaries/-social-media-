@@ -1,114 +1,133 @@
-import { Post } from "../models/post.models.js"
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { Post } from "../models/post.models.js";
 
+// get all getAllPosts
+const getAllPosts = async (req, res) => {
+  try {
+    const posts = await Post.find();
 
-
-const createPost = async (req, res) => {
-    try {
-        // Create a new Post instance with userId extracted from req.user._id
-        const newPost = new Post({...req.body, author:req.user._id});
-
-        // Access imgPath using optional chaining and set to null if not found
-        const imgPath = req.files?.img?.[0]?.path || null;
-
-        // Upload image to Cloudinary (Assuming uploadOnCloudinary works correctly)
-        const cloudinaryResponse = await uploadOnCloudinary(imgPath);
-
-        // Set the img field of the new post to the Cloudinary URL if available, or an empty string otherwise
-        newPost.img = (cloudinaryResponse && cloudinaryResponse.url) || "";
-
-        // Save the new post to the database
-        const savedPost = await newPost.save();
-
-        // Respond with the saved post
-        res.status(201).json({ post: savedPost, message: "Post successfully created" });
-    } catch (error) {
-        console.error("Error creating post:", error);
-        res.status(500).json({ error: "Internal server error" });
+    // Check if no posts were found
+    if (posts.length === 0) {
+      return res.status(404).json({ message: "No posts found" });
     }
-}
 
-
-const updatePost = async (req, res) => {
-    const user = req.user._id;
-    try {
-        // Find the post by the author's ID
-        const existingPost = await Post.findOne({ author: user });
-        if (!existingPost) {
-            return res.status(404).json({ message: "No post found for the user" });
-        }
-
-        // Check if req.body contains data
-        if (Object.keys(req.body).length === 0) {
-            return res.status(400).json({ message: "No update post data provided" });
-        }
-
-        // Find the post by the author's ID and update it with the request body
-        const updatedPost = await Post.findOneAndUpdate({ author: user }, req.body);
-        if (!updatedPost) {
-            return res.status(404).json({ message: "No post found for the user" });
-        }
-        res.status(200).json("The post has been updated");
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+    // Return successful response with the found posts
+    res.status(200).json({ posts });
+  } catch (error) {
+    // Handle other errors (e.g., database errors)
+    console.error("Error fetching posts:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
 };
 
 
- const deletePost = async (req, res) => {
-    const userId = req.user._id;
+// createPosts
+const createPosts = async (req, res) => {
+  try {
+    const { content, author } = req.body;
 
-    try {
-        // Find the post by the author's ID
-        const existingPost = await Post.findOne({author: userId});
-
-        if (!existingPost) {
-            return res.status(404).json({ message: "No post found for the user" });
-        }
-
-        // Delete the post
-        await Post.findByIdAndDelete(existingPost._id);
-
-        res.status(200).json("The post has been deleted");
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-}
-
-
-const getPost = async (req, res) => {
-    try {
-        // Find all posts
-        const allPosts = await Post.find();
-    
-        res.status(200).json(allPosts);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+    // Validate content and author fields
+    if (!content || !author) {
+      let errors = {};
+      if (!content) {
+        errors.content = "Content is required";
+      }
+      if (!author) {
+        errors.author = "Author is required";
+      }
+      return res.status(400).json({ errors });
     }
 
-}
+    // Create new post
+    const newPost = await Post.create({ content, author });
+
+    // Return successful response with the newly created post
+    res.status(200).json(newPost);
+  } catch (error) {
+    console.error("Error creating post:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 
-// Assuming req.user contains the current user's information
-// const timeline = async (req, res) => {
-//     try {
-//         const currentUser = req.user._id; // Assuming you have user ID in req.user._id
+//get a specific post
+const getPostsById = async (req, res) => {
+  try {
+    // checking postId from request parameters
+    const postId = req.params.id;
 
-//         // Find users followed by the current user
-//         const user = await User.findById(currentUser).populate('following', '_id');
+    // Check if postId is missing or empty
+    if (!postId) {
+      return res.status(400).json({ message: "ID is required" });
+    }
 
-//         // Extract the IDs of followed users
-//         const followedUsers = user.following.map(user => user._id);
+    // Fetch post from database by postId
+    const post = await Post.findById(postId);
 
-//         // Find posts authored by followed users
-//         const timelinePosts = await Post.find({ author: { $in: followedUsers } }).sort({ createdAt: -1 });
+    // If no post is found, return a 404 response
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
 
-//         res.status(200).json(timelinePosts);
-//     } catch (error) {
-//         res.status(500).json({ message: error.message });
-//     }
-// };
+    // Return the found post in a 200 response
+    res.status(200).json(post);
+  } catch (error) {
+    // If an error occurs during the database query, return a 500 response
+    console.error("Error fetching post:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 
 
-export { createPost, updatePost, deletePost, getPost }
+//Updates a specific post.
+const updatePost = async (req, res) => {
+  const postId = req.params.id;
+  if (!postId) {
+    return res.status(400).json({ message: "ID is required" });
+  }
+
+  const { content } = req.body;
+  if (!content || content.trim().length === 0) {
+    return res.status(400).json({ message: "Content cannot be empty" });
+  }
+
+  try {
+    const post = await Post.findByIdAndUpdate(postId, { content }, { new: true });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.status(200).json({ post });
+  } catch (error) {
+    console.error("Error updating post:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
+// Deletes a specific post
+const deletePostById = async (req, res) => {
+  const postId = req.params.id;
+  
+  try {
+      // Find the post by ID and delete it
+      const deletedPost = await Post.findByIdAndDelete(postId);
+
+      // Check if the post was found and deleted
+      if (!deletedPost) {
+          return res.status(404).json({ message: "Post not found" });
+      }
+
+  
+      res.status(200).json(deletedPost, { message: "Post deleted successfully" });
+  } catch (error) {
+      
+      console.error("Error deleting post:", error);
+      res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
+export { getAllPosts, createPosts, getPostsById, updatePost, deletePostById };

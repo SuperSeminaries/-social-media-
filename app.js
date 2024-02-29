@@ -8,10 +8,11 @@ app.use(express.urlencoded({extended: true}))
 app.use(cookieParser())
 
 import userRoutes from "./src/routes/user.routes.js"
-import postRoutes from "./src/routes/post.routes.js"
+import post from './src/routes/post.router.js'
 
 app.use("/api/users", userRoutes)
-app.use("/api/post", postRoutes )
+// app.use("/api/post", postRoutes )
+app.use("/api/posts", post )
 
 
 export { app }
